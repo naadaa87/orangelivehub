@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://orange-live-hub.pages.dev/sitemap.xml
