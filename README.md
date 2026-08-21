@@ -44,7 +44,6 @@ HMK 홀딩스그룹 라이브커머스 **고객용 홈페이지**입니다.
 ├── 404.html              오류 화면
 ├── sitemap.xml / robots.txt
 ├── _headers              보안 헤더 · 캐시 정책
-├── _redirects            확장자 없는 주소 매핑
 └── assets/
     ├── css/style.css     디자인 시스템 (약 27KB)
     ├── js/data.js        ★ 콘텐츠 데이터 — 운영자가 고칠 파일
@@ -252,7 +251,56 @@ Cloudflare Pages Functions를 쓴다면 `functions/api/leads.js` 를 만들어 �
 
 ---
 
-## 10. 로컬에서 확인하기
+## 10. 자주 겪는 배포 문제
+
+### 메뉴를 누르면 `ERR_TOO_MANY_REDIRECTS`
+
+**원인은 `_redirects` 파일입니다. 이 저장소에는 그 파일이 없어야 합니다.**
+
+Cloudflare Pages는 확장자 없는 주소를 이미 알아서 처리합니다.
+`schedule.html` 을 올려두면 `/schedule` 로 접속해도 그대로 열리고,
+`/schedule.html` 로 들어오면 `/schedule` 로 한 번 정리해 줍니다.
+
+여기에 아래 같은 규칙을 직접 넣으면 서로를 무한히 되돌리게 됩니다.
+
+```
+/schedule   /schedule.html   200      ← 넣으면 안 되는 규칙
+```
+
+1. 브라우저가 `/schedule.html` 요청
+2. Cloudflare가 `/schedule` 로 정리
+3. 위 규칙이 다시 `/schedule.html` 로 되돌림
+4. 2번으로 돌아가 무한 반복
+
+해결은 파일을 지우는 것입니다.
+
+```bash
+git rm _redirects
+git commit -m "무한 리다이렉트를 만드는 _redirects 제거"
+git push
+```
+
+배포가 끝난 뒤 확인:
+
+```bash
+curl -I https://orangelivehub.pages.dev/schedule       # 200 이면 정상
+curl -I https://orangelivehub.pages.dev/schedule.html  # 308 → /schedule (정상)
+```
+
+브라우저에 리다이렉트가 캐시되어 있을 수 있으니, 시크릿 창이나 강력 새로고침(Ctrl+Shift+R)으로 확인해 주세요.
+
+### 그 밖에
+
+| 증상 | 확인할 것 |
+|---|---|
+| 홈은 나오는데 나머지가 404 | Build output directory 설정. Monorepo면 `apps/live-web` |
+| 스타일이 깨진 채로 나옴 | 폰트 CDN(`cdn.jsdelivr.net`, `fonts.googleapis.com`) 차단 여부 |
+| 이미지가 안 보임 | 파일명 대소문자. Cloudflare는 구분하고 Windows는 구분하지 않음 |
+| 수정했는데 반영이 안 됨 | Pages의 **Deployments** 탭에서 최신 커밋이 배포됐는지 확인 |
+
+---
+
+## 11. 로컬에서 확인하기
 
 빌드가 필요 없으므로 정적 서버만 있으면 됩니다.
 
