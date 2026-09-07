@@ -1,4 +1,26 @@
+# 오렌지 라이브커머스 (Orange Live On)
+# https://orangeliveon.com
+
 User-agent: *
 Allow: /
+Disallow: /api/
 
-Sitemap: https://orange-live-hub.pages.dev/sitemap.xml
+# 네이버 검색로봇
+User-agent: Yeti
+Allow: /
+Disallow: /api/
+Crawl-delay: 1
+
+# 다음 검색로봇
+User-agent: Daum
+Allow: /
+Disallow: /api/
+
+User-agent: Googlebot
+Allow: /
+Disallow: /api/
+
+User-agent: Googlebot-Image
+Allow: /assets/img/
+
+Sitemap: https://orangeliveon.com/sitemap.xml

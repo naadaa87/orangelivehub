@@ -1,4 +1,4 @@
-# 오렌지 라이브 허브 (Orange Live Hub)
+# 오렌지 라이브커머스 (Orange Live On)
 
 HMK 홀딩스그룹 라이브커머스 **고객용 홈페이지**입니다.
 빌드 도구 없이 그대로 동작하는 정적 사이트라, GitHub에 올리고 Cloudflare Pages에 연결하면 바로 배포됩니다.
@@ -44,10 +44,17 @@ HMK 홀딩스그룹 라이브커머스 **고객용 홈페이지**입니다.
 ├── 404.html              오류 화면
 ├── sitemap.xml / robots.txt
 ├── _headers              보안 헤더 · 캐시 정책
+├── schema.sql            D1 스키마 (선택 · 백엔드 붙일 때)
+├── functions/            Cloudflare Pages Functions (선택)
+│   └── api/
+│       ├── broadcasts.js   GET  편성 조회
+│       ├── leads.js        POST 신청·문의 접수
+│       └── sync/youtube.js POST 유튜브 방송 자동 연결
 └── assets/
-    ├── css/style.css     디자인 시스템 (약 27KB)
+    ├── css/style.css     디자인 시스템
     ├── js/data.js        ★ 콘텐츠 데이터 — 운영자가 고칠 파일
-    ├── js/app.js         렌더링·필터·폼 검증
+    ├── js/app.js         렌더링·필터·폼 검증·캘린더·공유
+    ├── js/sim.js         셀러 매출 시뮬레이터
     └── img/              WebP 24종 (총 1.6MB)
 ```
 
@@ -58,14 +65,14 @@ HMK 홀딩스그룹 라이브커머스 **고객용 홈페이지**입니다.
 ## 3. GitHub 올리기
 
 ```bash
-cd orange-live-hub
+cd orangeliveon
 
 git init
 git branch -M main
 git add .
-git commit -m "오렌지 라이브 허브 고객용 홈페이지 초기 구축"
+git commit -m "오렌지 라이브커머스 고객용 홈페이지 초기 구축"
 
-git remote add origin https://github.com/<계정>/orange-live-hub.git
+git remote add origin https://github.com/<계정>/orangeliveon.git
 git push -u origin main
 ```
 
@@ -87,18 +94,18 @@ Cloudflare 프로젝트 설정에서 **Root directory**를 `apps/live-web` 으�
 | Build output directory | `/` (Monorepo면 `apps/live-web`) |
 | Root directory | *(비움 또는 `apps/live-web`)* |
 
-4. **Save and Deploy** → 1분 내로 `orange-live-hub.pages.dev` 가 열립니다.
+4. **Save and Deploy** → 1분 내로 `orangeliveon.com` 가 열립니다.
 
 이후 `main` 브랜치에 push할 때마다 자동 재배포되고, Pull Request에는 미리보기 URL이 붙습니다.
 
 ### 도메인 연결
 
 **Custom domains** 탭에서 `live.hmk-holdings.co.kr` 같은 주소를 추가하면 됩니다.
-연결 후 `build/shell.py` 와 각 HTML의 `BASE`(`https://orange-live-hub.pages.dev`)를 실제 도메인으로 바꿔야
+연결 후 `build/shell.py` 와 각 HTML의 `BASE`(`https://orangeliveon.com`)를 실제 도메인으로 바꿔야
 `canonical`, `og:url`, `sitemap.xml` 이 맞습니다. 전체 치환 한 번이면 됩니다.
 
 ```bash
-grep -rl "orange-live-hub.pages.dev" . | xargs sed -i 's#https://orange-live-hub.pages.dev#https://live.hmk-holdings.co.kr#g'
+grep -rl "orangeliveon.com" . | xargs sed -i 's#https://orangeliveon.com#https://live.hmk-holdings.co.kr#g'
 ```
 
 ---
@@ -283,8 +290,8 @@ git push
 배포가 끝난 뒤 확인:
 
 ```bash
-curl -I https://orangelivehub.pages.dev/schedule       # 200 이면 정상
-curl -I https://orangelivehub.pages.dev/schedule.html  # 308 → /schedule (정상)
+curl -I https://orangeliveon.com/schedule       # 200 이면 정상
+curl -I https://orangeliveon.com/schedule.html  # 308 → /schedule (정상)
 ```
 
 브라우저에 리다이렉트가 캐시되어 있을 수 있으니, 시크릿 창이나 강력 새로고침(Ctrl+Shift+R)으로 확인해 주세요.
@@ -300,7 +307,180 @@ curl -I https://orangelivehub.pages.dev/schedule.html  # 308 → /schedule (정�
 
 ---
 
-## 11. 로컬에서 확인하기
+---
+
+## 11. 채널 연동 — 왜 유튜브만 자동인가
+
+채널마다 개방 수준이 다릅니다. 이걸 숨기지 않고 화면과 코드에 그대로 반영했습니다.
+
+| 채널 | 방식 | 근거 |
+|---|---|---|
+| **유튜브** | API 자동 | Live Streaming API의 `liveBroadcasts.list`로 예약된 방송을 가져올 수 있습니다 |
+| **네이버** | 담당자 등록 | 커머스API는 상품·주문·정산용입니다. 쇼핑라이브 방송 조회 API는 공개되지 않았습니다 |
+| **카카오** | 담당자 등록 | 공개 API 없음 |
+| **틱톡** | 승인 후 연동 | TikTok Shop Partner API 이용에 파트너 승인이 필요합니다 |
+
+`_headers`만 있는 지금 상태로도 사이트는 완전히 동작합니다. 아래는 **선택 사항**이며,
+붙이지 않아도 기존 화면은 그대로입니다.
+
+### 12-1. D1 만들고 연결하기
+
+```bash
+npx wrangler d1 create orangeliveon
+npx wrangler d1 execute orangeliveon --remote --file=./schema.sql
+```
+
+Cloudflare 대시보드 → 프로젝트 → **Settings → Bindings → D1 database** 에서
+변수 이름 `DB`, 데이터베이스 `orangeliveon` 로 연결합니다.
+
+연결 전에는 `/api/broadcasts` 가 501을 돌려주고, 홈페이지는 `data.js` 의 정적 데이터로 계속 동작합니다.
+**연결에 실패해도 사이트가 깨지지 않는 구조입니다.**
+
+### 12-2. 편성을 API에서 받아오기
+
+`assets/js/data.js` 의 `apiBase` 를 채우면 됩니다.
+
+```js
+config: { apiBase: 'https://orangeliveon.com' }
+```
+
+`/api/broadcasts` 응답은 `data.js` 의 `broadcasts` 배열과 같은 모양이라 화면 코드를 고칠 필요가 없습니다.
+확인(`verified_at`)이 끝난 링크만 `channelLinks` 로 내려가고, 미확인 링크는 화면에서 비활성으로 표시됩니다.
+
+### 12-3. 유튜브 자동 연결
+
+Google Cloud Console에서 OAuth 클라이언트를 만들고, 방송을 올릴 채널 계정으로
+`https://www.googleapis.com/auth/youtube` 범위의 refresh token을 한 번 발급받습니다.
+
+Pages → **Settings → Variables and secrets** 에 넣을 값:
+
+| 이름 | 설명 |
+|---|---|
+| `YT_CLIENT_ID` | OAuth 클라이언트 ID |
+| `YT_CLIENT_SECRET` | 시크릿 (Secret으로 저장) |
+| `YT_REFRESH_TOKEN` | refresh token (Secret으로 저장) |
+| `SYNC_TOKEN` | 동기화 호출용 임의 문자열 (Secret으로 저장) |
+| `SALT` | 접수 IP 해시용 임의 문자열 (Secret으로 저장) |
+
+호출은 이렇게 합니다.
+
+```bash
+curl -X POST https://orangeliveon.com/api/sync/youtube \
+  -H "x-sync-token: <SYNC_TOKEN>"
+```
+
+편성표의 날짜·시각과 유튜브 예약 방송의 시각이 일치하면 자동으로 연결됩니다.
+Cron으로 10분마다 돌리면 편성표가 알아서 최신 상태를 유지합니다.
+
+### 12-4. 네이버·카카오 링크 등록
+
+담당자가 방송 링크를 확인한 뒤 넣습니다. `verified_at` 이 채워져야 화면에서 링크가 열립니다.
+
+```sql
+INSERT INTO broadcast_channels (broadcast_id, channel, watch_url, source, verified_at)
+VALUES ('B2610011', 'naver', 'https://shoppinglive.naver.com/lives/000000', 'manual', datetime('now'))
+ON CONFLICT(broadcast_id, channel) DO UPDATE
+  SET watch_url = excluded.watch_url, verified_at = datetime('now');
+```
+
+### 12-5. 폼을 실제 접수로 바꾸기
+
+`assets/js/app.js` 의 `initForms()` 안 주석 자리에서 `/api/leads` 로 POST하면 됩니다.
+`kind` 값은 `seller` · `brand` · `studio` · `notify` · `inquiry` 중 하나입니다.
+
+접수 엔드포인트는 개인정보를 다루므로 세 가지를 지킵니다.
+
+- 동의(`agree`) 없이는 저장하지 않습니다
+- 광고성 정보 수신은 `marketing` 동의로만 처리합니다
+- 접속 IP는 원문 대신 해시만 남깁니다
+
+저장 항목과 보유 기간은 `policy.html` 의 표와 **반드시 일치시켜야 합니다.** 한쪽만 바꾸면 고지 위반이 됩니다.
+
+---
+
+## 12. 셀러 매출 시뮬레이터
+
+`assets/js/sim.js` 상단 `MODEL` 객체에 계수가 모여 있습니다.
+실제 사업 조건이 정해지면 이 값들을 바꿔주세요.
+
+| 값 | 현재 | 성격 |
+|---|---|---|
+| `reach` | 네이버 90 / 틱톡 70 / 유튜브 55 / 카카오 40 | 신규 셀러 초기 회당 고유 시청자 추정 |
+| `chDecay` | 0.65 | 채널을 늘려도 시청자가 단순 합산되지 않는 점 반영 |
+| `cvr` | 4% / 7% / 11% | 업계 평균 5~10%보다 보수적으로 |
+| `feeRate` | 12% | **가정값** — 실제 수수료로 교체 필요 |
+| `logisticsPerOrder` | 3,000원 | **가정값** — 실제 물류 단가로 교체 필요 |
+| `mode.*.cost` | 9만 / 62만 / 72만 | 스튜디오 요금표 기준 |
+
+**이 도구는 셀러를 설득하는 계산기가 아닙니다.** 조건이 안 맞으면 적자를 적자로 보여주고,
+손익분기 시청자 수를 알려줍니다. 계수를 낙관적으로 바꾸면 도구의 신뢰가 무너지니 주의해 주세요.
+화면에도 추정치이며 매출을 보증하지 않는다는 문구를 고정으로 띄웁니다.
+
+---
+
+
+---
+
+## 14. SEO — 네이버·구글 최적화
+
+### 적용한 것
+
+| 항목 | 내용 |
+|---|---|
+| title / description | 페이지마다 개별 작성. 네이버가 선호하는 title 40자·description 80자 안팎에 맞췄습니다 |
+| keywords | 네이버가 아직 참고하는 항목이라 페이지별로 넣었습니다 |
+| canonical | 확장자 없는 주소(`/schedule`)로 통일했습니다. Cloudflare가 `.html`을 그리로 보내므로 중복 색인이 생기지 않습니다 |
+| 구조화 데이터 | Organization · WebSite · BreadcrumbList를 전 페이지에, FAQPage(고객지원) · Service(스튜디오)를 추가로 넣었습니다 |
+| sameAs | 그룹 6개 사이트를 연결해 같은 사업체 묶음임을 알립니다 |
+| og:image | `assets/img/og-image.jpg` (1200×630). 카카오톡·네이버 공유 시 이 이미지가 뜹니다 |
+| robots.txt | 네이버 `Yeti`, 다음 `Daum`, `Googlebot`을 명시하고 `/api/`만 차단했습니다 |
+| sitemap.xml | lastmod·changefreq·priority 포함, 대표 이미지도 등록했습니다 |
+
+### 반드시 직접 해야 하는 일
+
+**1. 사이트 소유확인 코드 넣기** — 전 페이지 `<head>`에 빈 채로 넣어뒀습니다.
+
+```html
+<meta name="naver-site-verification" content="">
+<meta name="google-site-verification" content="">
+```
+
+- 네이버: [서치어드바이저](https://searchadvisor.naver.com) → 사이트 등록 → HTML 태그 방식 → 발급된 값을 `content`에 붙여넣기
+- 구글: [서치 콘솔](https://search.google.com/search-console) → 속성 추가 → HTML 태그 방식
+
+**2. 사이트맵 제출** — 두 곳 모두에 `https://orangeliveon.com/sitemap.xml` 을 등록합니다.
+네이버는 서치어드바이저 → 요청 → 사이트맵 제출, 구글은 서치 콘솔 → Sitemaps 입니다.
+
+**3. 네이버 비즈니스 등록** — 네이버는 검색 결과에서 자체 서비스 데이터를 우선합니다.
+스마트플레이스에 사업장을 등록하면 "화성 라이브커머스 스튜디오" 같은 지역 검색에서 노출이 크게 달라집니다.
+
+**4. 도메인 연결 후 확인** — Cloudflare Custom domains에 `orangeliveon.com` 을 연결하고,
+`www` 로도 들어오면 하나로 모으도록 리다이렉트 규칙을 걸어주세요. 둘 다 열려 있으면 색인이 갈라집니다.
+
+### 노리는 키워드
+
+| 페이지 | 주력 키워드 |
+|---|---|
+| 홈 | 라이브커머스, 오렌지 라이브커머스, 라이브 방송 편성표 |
+| 편성표 | 라이브커머스 편성표, 쇼핑라이브 일정, 네이버 쇼핑라이브 일정 |
+| 셀러 센터 | 라이브커머스 입점, 셀러 모집, 라이브커머스 수수료, 라이브커머스 대행 |
+| 스튜디오 | 라이브커머스 스튜디오, 스튜디오 대관, 화성·동탄 방송 스튜디오 |
+| 물류·보관 | 라이브커머스 풀필먼트, 공유창고, 물류대행, 3PL |
+
+지역 키워드(화성·동탄)는 경쟁이 낮고 전환이 높은 편이라 스튜디오 페이지에 함께 넣었습니다.
+
+### 앞으로 순위를 끌어올리려면
+
+검색 순위는 기술 설정만으로 올라가지 않습니다. 지금 구조에서 가장 효과가 큰 순서는 이렇습니다.
+
+1. **방송이 실제로 쌓이는 것** — 편성표에 방송이 계속 올라오면 색인 대상 페이지가 늘고 신선도 점수가 붙습니다
+2. **다시보기 공개** — 영상 페이지는 체류시간이 길어 검색엔진이 좋아합니다
+3. **그룹 사이트 상호 링크** — 6개 사이트가 서로를 링크하면 도메인 신뢰도가 함께 올라갑니다. 지금은 이쪽에서만 걸어둔 상태이니 반대 방향도 걸어주세요
+4. **셀러 사례 콘텐츠** — "라이브커머스 어떻게 시작하나요" 같은 실무 글이 검색 유입의 핵심입니다
+
+---
+
+## 15. 로컬에서 확인하기
 
 빌드가 필요 없으므로 정적 서버만 있으면 됩니다.
 

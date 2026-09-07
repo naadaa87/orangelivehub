@@ -1,5 +1,5 @@
 /* ============================================================
-   오렌지 라이브 허브 — 공통 스크립트
+   오렌지 라이브커머스 — 공통 스크립트
    의존: assets/js/data.js (window.OLH)
    ============================================================ */
 (function () {
@@ -9,6 +9,11 @@
   var CFG = D.config || {};
   var $ = function (s, r) { return (r || document).querySelector(s); };
   var $$ = function (s, r) { return Array.prototype.slice.call((r || document).querySelectorAll(s)); };
+
+  var ICO = {
+    cal: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M8 3v4M16 3v4M3 10h18"/></svg>',
+    share: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4"/></svg>'
+  };
 
   /* ---------- 유틸 ---------- */
   function esc(s) {
@@ -80,6 +85,104 @@
   }
 
   function chChipSmall(key) { return chChip(key, true); }
+
+
+  /* ---------- 캘린더 담기 (.ics) ---------- */
+  function pad(n) { return String(n).padStart(2, '0'); }
+
+  // 방송 시각은 한국시간(KST, UTC+9) 기준으로 기록되어 있습니다.
+  function toUTC(dateISO, hhmm) {
+    var d = String(dateISO).split('-'), t = String(hhmm).split(':');
+    return new Date(Date.UTC(+d[0], +d[1] - 1, +d[2], +t[0] - 9, +t[1], 0));
+  }
+
+  function icsStamp(dt) {
+    return dt.getUTCFullYear() + pad(dt.getUTCMonth() + 1) + pad(dt.getUTCDate()) +
+      'T' + pad(dt.getUTCHours()) + pad(dt.getUTCMinutes()) + '00Z';
+  }
+
+  function icsEscape(t) {
+    return String(t).replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\n/g, '\\n');
+  }
+
+  function buildICS(b) {
+    var url = location.origin + location.pathname.replace(/[^/]*$/, '') + 'broadcast.html?id=' + b.id;
+    var desc = [
+      b.cat + ' · ' + b.studio,
+      '진행 ' + b.host,
+      '편성 상품: ' + b.lineup.join(', '),
+      '',
+      '※ 방송은 외부 채널에서 진행됩니다. 시청 채널은 아래 링크에서 확인해 주세요.',
+      url
+    ].join('\n');
+
+    return [
+      'BEGIN:VCALENDAR',
+      'VERSION:2.0',
+      'PRODID:-//Orange Live On//Broadcast Schedule//KO',
+      'CALSCALE:GREGORIAN',
+      'METHOD:PUBLISH',
+      'BEGIN:VEVENT',
+      'UID:' + b.id + '@orangeliveon',
+      'DTSTAMP:' + icsStamp(new Date()),
+      'DTSTART:' + icsStamp(toUTC(b.date, b.start)),
+      'DTEND:' + icsStamp(toUTC(b.date, b.end)),
+      'SUMMARY:' + icsEscape('[오렌지 라이브] ' + b.title),
+      'DESCRIPTION:' + icsEscape(desc),
+      'URL:' + url,
+      'BEGIN:VALARM',
+      'TRIGGER:-PT30M',
+      'ACTION:DISPLAY',
+      'DESCRIPTION:' + icsEscape('30분 뒤 방송이 시작됩니다 — ' + b.title),
+      'END:VALARM',
+      'END:VEVENT',
+      'END:VCALENDAR'
+    ].join('\r\n');
+  }
+
+  function downloadICS(b) {
+    var blob = new Blob(['\uFEFF' + buildICS(b)], { type: 'text/calendar;charset=utf-8' });
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'orange-live-' + b.id + '.ics';
+    document.body.appendChild(a); a.click();
+    setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 600);
+  }
+
+  /* ---------- 공유 ---------- */
+  function shareBroadcast(b, btn) {
+    var url = location.origin + location.pathname.replace(/[^/]*$/, '') + 'broadcast.html?id=' + b.id;
+    var text = b.date.replace(/-/g, '.') + ' ' + b.start + ' · ' + b.title;
+    if (navigator.share) {
+      navigator.share({ title: '오렌지 라이브커머스', text: text, url: url }).catch(function () {});
+      return;
+    }
+    var done = function () {
+      if (!btn) return;
+      var o = btn.innerHTML;
+      btn.innerHTML = '링크를 복사했습니다';
+      setTimeout(function () { btn.innerHTML = o; }, 1800);
+    };
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(url).then(done).catch(done);
+    } else {
+      var ta = document.createElement('textarea');
+      ta.value = url; document.body.appendChild(ta); ta.select();
+      try { document.execCommand('copy'); } catch (e) {}
+      ta.remove(); done();
+    }
+  }
+
+  // 편성표·상세 어디서든 동작하도록 문서 단위로 위임
+  document.addEventListener('click', function (e) {
+    var el = e.target.closest('[data-ics],[data-share]');
+    if (!el) return;
+    var id = el.dataset.ics || el.dataset.share;
+    var b = (D.broadcasts || []).filter(function (x) { return x.id === id; })[0];
+    if (!b) return;
+    e.preventDefault();
+    if (el.dataset.ics) downloadICS(b); else shareBroadcast(b, el);
+  });
 
   /* ---------- 헤더 / 모바일 메뉴 ---------- */
   function initNav() {
@@ -180,7 +283,10 @@
       '</div>' +
       '<div class="row__side">' + stateBadge(st) +
       '<div class="row__ch">' + b.channels.map(chChipSmall).join('') + '</div>' +
-      '</div>' +
+      '<div class="row__act">' +
+      '<button type="button" class="minibtn" data-ics="' + esc(b.id) + '">' + ICO.cal + '캘린더</button>' +
+      '<button type="button" class="minibtn" data-share="' + esc(b.id) + '">' + ICO.share + '공유</button>' +
+      '</div></div>' +
       (b.note ? '<div class="row__note"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 8h.01M11 12h1v4h1"/></svg><span>' + esc(b.note) + '</span></div>' : '') +
       '</article>';
   }
@@ -281,7 +387,7 @@
     }
 
     var st = calcStatus(b);
-    document.title = b.title + ' — 오렌지 라이브 허브';
+    document.title = b.title + ' — 오렌지 라이브커머스';
     var t = $('#bcCrumb'); if (t) t.textContent = b.title;
 
     box.innerHTML =
@@ -303,15 +409,17 @@
       '<p style="font-size:13.5px;color:var(--ink-3);margin-top:12px">' +
       (CFG.channelLinksReady ? '채널을 누르면 해당 플랫폼으로 이동합니다.' : '채널 계정이 확정되면 링크가 열립니다. 방송 시작 30분 전부터 이동할 수 있습니다.') +
       '</p></div>' +
-      '<div class="btn-row mt-32"><a class="btn btn--primary" href="support.html?type=broadcast">방송 알림 신청</a>' +
-      '<a class="btn btn--line" href="schedule.html">전체 편성표</a></div>' +
+      '<div class="btn-row mt-32">' +
+      '<button type="button" class="btn btn--primary" data-ics="' + esc(b.id) + '">' + ICO.cal + ' 내 캘린더에 담기</button>' +
+      '<button type="button" class="btn btn--line" data-share="' + esc(b.id) + '">' + ICO.share + ' 공유하기</button></div>' +
+      '<p style="font-size:13px;color:var(--ink-3);margin-top:12px">캘린더에 담으면 방송 30분 전에 기기 알림이 울립니다. 문자나 이메일 안내를 원하시면 <a href="support.html?type=broadcast" style="color:var(--o-600);text-decoration:underline">방송 알림</a>을 신청해 주세요.</p>' +
       '</div></div>' +
 
       '<div class="grid g-2 mt-56" style="gap:32px">' +
       '<div><h2 class="sec__title" style="font-size:22px">편성 상품</h2>' +
       '<ul class="track__list mt-16">' + b.lineup.map(function (l) { return '<li>' + esc(l) + '</li>'; }).join('') + '</ul>' +
       '<div class="note mt-24"><svg class="note__ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 8h.01M11 12h1v4h1"/></svg>' +
-      '<div>가격·재고·쿠폰은 방송이 열리는 채널에서 공개됩니다. 승인되지 않은 가격을 미리 표시하지 않는 것이 <b>오렌지 라이브 허브의 원칙</b>입니다.</div></div>' +
+      '<div>가격·재고·쿠폰은 방송이 열리는 채널에서 공개됩니다. 승인되지 않은 가격을 미리 표시하지 않는 것이 <b>오렌지 라이브커머스의 원칙</b>입니다.</div></div>' +
       '</div>' +
       '<div><h2 class="sec__title" style="font-size:22px">방송 정보</h2>' +
       '<div class="tbl mt-16"><table><tbody>' +
