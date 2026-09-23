@@ -1,4 +1,4 @@
-# 오렌지 라이브커머스 (Orange Live On)
+# 오렌지 라이브 커머스 (Orange Live On)
 
 HMK 홀딩스그룹 라이브커머스 **고객용 홈페이지**입니다.
 빌드 도구 없이 그대로 동작하는 정적 사이트라, GitHub에 올리고 Cloudflare Pages에 연결하면 바로 배포됩니다.
@@ -44,8 +44,8 @@ HMK 홀딩스그룹 라이브커머스 **고객용 홈페이지**입니다.
 ├── 404.html              오류 화면
 ├── sitemap.xml / robots.txt
 ├── _headers              보안 헤더 · 캐시 정책
-├── schema.sql            D1 스키마 (선택 · 백엔드 붙일 때)
-├── functions/            Cloudflare Pages Functions (선택)
+├── schema.sql            D1 스키마 (선택 · 별도 압축파일로 제공)
+├── functions/            Cloudflare Pages Functions (선택 · 별도 압축파일로 제공)
 │   └── api/
 │       ├── broadcasts.js   GET  편성 조회
 │       ├── leads.js        POST 신청·문의 접수
@@ -53,7 +53,7 @@ HMK 홀딩스그룹 라이브커머스 **고객용 홈페이지**입니다.
 └── assets/
     ├── css/style.css     디자인 시스템
     ├── js/data.js        ★ 콘텐츠 데이터 — 운영자가 고칠 파일
-    ├── js/app.js         렌더링·필터·폼 검증·캘린더·공유
+    ├── js/app.js         렌더링·필터·폼 검증·구글 캘린더 담기·공유
     ├── js/sim.js         셀러 매출 시뮬레이터
     └── img/              WebP 24종 (총 1.6MB)
 ```
@@ -70,7 +70,7 @@ cd orangeliveon
 git init
 git branch -M main
 git add .
-git commit -m "오렌지 라이브커머스 고객용 홈페이지 초기 구축"
+git commit -m "오렌지 라이브 커머스 고객용 홈페이지 초기 구축"
 
 git remote add origin https://github.com/<계정>/orangeliveon.git
 git push -u origin main
@@ -438,15 +438,20 @@ ON CONFLICT(broadcast_id, channel) DO UPDATE
 
 ### 반드시 직접 해야 하는 일
 
-**1. 사이트 소유확인 코드 넣기** — 전 페이지 `<head>`에 빈 채로 넣어뒀습니다.
+**1. 사이트 소유확인** — 네이버는 **적용 완료**입니다. 전 페이지 `<head>`에 두 개가 들어가 있습니다.
 
 ```html
-<meta name="naver-site-verification" content="">
-<meta name="google-site-verification" content="">
+<!-- https://orangeliveon.com -->
+<meta name="naver-site-verification" content="51ebb4ece6c0ac4c31d93112dedb133701f4e709">
+<!-- https://www.orangeliveon.com -->
+<meta name="naver-site-verification" content="8e0449d010057637bc81baed3f45e7857fa242b0">
 ```
 
-- 네이버: [서치어드바이저](https://searchadvisor.naver.com) → 사이트 등록 → HTML 태그 방식 → 발급된 값을 `content`에 붙여넣기
-- 구글: [서치 콘솔](https://search.google.com/search-console) → 속성 추가 → HTML 태그 방식
+같은 페이지가 두 주소로 모두 열리므로, 한 파일에 두 코드를 함께 넣어 두 속성을 동시에 확인하는 방식입니다.
+배포 후 서치어드바이저에서 각 주소의 **[소유확인]** 버튼을 누르면 됩니다.
+
+구글은 코드 대신 **DNS 확인**을 권합니다. 도메인이 Cloudflare에 있으니 서치 콘솔에서 '도메인' 속성으로 추가하고,
+안내되는 TXT 레코드를 Cloudflare DNS에 넣으면 `www` 유무와 상관없이 한 번에 확인됩니다. 홈페이지 코드를 고칠 필요가 없습니다.
 
 **2. 사이트맵 제출** — 두 곳 모두에 `https://orangeliveon.com/sitemap.xml` 을 등록합니다.
 네이버는 서치어드바이저 → 요청 → 사이트맵 제출, 구글은 서치 콘솔 → Sitemaps 입니다.
@@ -461,7 +466,7 @@ ON CONFLICT(broadcast_id, channel) DO UPDATE
 
 | 페이지 | 주력 키워드 |
 |---|---|
-| 홈 | 라이브커머스, 오렌지 라이브커머스, 라이브 방송 편성표 |
+| 홈 | 라이브커머스, 오렌지 라이브 커머스, 라이브 방송 편성표 |
 | 편성표 | 라이브커머스 편성표, 쇼핑라이브 일정, 네이버 쇼핑라이브 일정 |
 | 셀러 센터 | 라이브커머스 입점, 셀러 모집, 라이브커머스 수수료, 라이브커머스 대행 |
 | 스튜디오 | 라이브커머스 스튜디오, 스튜디오 대관, 화성·동탄 방송 스튜디오 |
@@ -492,3 +497,13 @@ npx serve .
 
 `file://` 로 직접 열면 `broadcast.html?id=` 쿼리 처리와 일부 스크립트가 정상 동작하지 않습니다.
 반드시 로컬 서버를 통해 확인해 주세요.
+
+
+---
+
+## 참고 — 압축파일이 백신에 걸릴 때
+
+이 사이트에는 실행 파일이 없습니다. 그래도 백신이 코드 모양만 보고 오해하는 경우가 있어 아래 원칙을 지킵니다.
+
+- 브라우저에서 파일을 만들어 자동으로 내려받게 하는 코드를 쓰지 않습니다. 캘린더 담기는 구글 캘린더 일정 추가 화면을 여는 방식입니다
+- 서버용 코드(`functions/`, `schema.sql`)는 인증 관련 단어가 들어 있어 사이트 본체와 따로 압축해 전달합니다

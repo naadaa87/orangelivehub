@@ -1,4 +1,4 @@
-# 오렌지 라이브커머스 (Orange Live On)
+# 오렌지 라이브 커머스 (Orange Live On)
 # https://orangeliveon.com
 
 User-agent: *
